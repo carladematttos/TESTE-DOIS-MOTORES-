@@ -1,0 +1,140 @@
+#include <xc.h>
+#include <stdbool.h>
+
+#define _XTAL_FREQ 4000.0
+#define TEMPO 5
+
+// Funções do motor de passo
+void sentido_1_passo();
+void sentido_2_passo();
+void configura_motor_passo();
+
+// Funções do motor DC
+void config_dc_motor();
+void config_pwm();
+void set_pwm_duty(unsigned int duty);
+void parar_motor_dc();
+void acionar_sentido_1_dc();
+void acionar_sentido_2_dc();
+
+// Funções do ADC
+void config_adc();
+int read_adc();
+
+int main()
+{
+    // Configurações iniciais
+    configura_motor_passo();
+    config_dc_motor();
+    config_adc();
+    config_pwm();  // Configura PWM para o motor DC
+
+    while (true) {
+        // Lê o valor do ADC
+        if (read_adc() >= 512) {
+            acionar_sentido_1_dc();
+            set_pwm_duty(1023);  // Defina o duty cycle PWM máximo para maior velocidade
+            sentido_1_passo();
+        } else {
+            acionar_sentido_2_dc();
+            set_pwm_duty(1023);  // Duty cycle máximo para velocidade máxima
+            sentido_2_passo();
+        }
+    }
+
+    return 0;
+}
+
+// Implementação das funções do motor de passo
+void sentido_1_passo()
+{
+    PORTC = 0b00000001;
+    __delay_ms(TEMPO);
+    PORTC = 0b00000100;
+    __delay_ms(TEMPO);
+    PORTC = 0b00000010;
+    __delay_ms(TEMPO);
+    PORTC = 0b00001000;
+    __delay_ms(TEMPO);
+}
+
+void sentido_2_passo()
+{
+    PORTC = 0b00001000;
+    __delay_ms(TEMPO);
+    PORTC = 0b00000010;
+    __delay_ms(TEMPO);
+    PORTC = 0b00000100;
+    __delay_ms(TEMPO);
+    PORTC = 0b00000001;
+    __delay_ms(TEMPO);
+}
+
+void configura_motor_passo()
+{
+    TRISC   = 0b11110000;
+    PORTC   = 0b00000000;
+}
+
+// Implementação das funções do motor DC
+void config_dc_motor()
+{
+    TRISCbits.RC4 = 0;
+    TRISCbits.RC5 = 0;
+}
+
+void config_pwm()
+{
+    // Configuração básica do PWM (ajuste conforme o microcontrolador específico)
+    PR2 = 0xFF;                  // Define o período PWM
+    CCP1CON = 0b00001100;        // Configura o CCP1 para PWM
+    T2CON = 0b00000100;          // Configura Timer2 para 1:1 prescale
+    TMR2 = 0;
+    T2CONbits.TMR2ON = 1;        // Liga o Timer2
+}
+
+void set_pwm_duty(unsigned int duty)
+{
+    // Ajusta o duty cycle do PWM (0-1023 para duty total)
+    CCPR1L = duty >> 2;
+    CCP1CONbits.DC1B = duty & 0x03;
+}
+
+void parar_motor_dc()
+{
+    PORTCbits.RC4 = 0;
+    PORTCbits.RC5 = 0;
+}
+
+void acionar_sentido_1_dc()
+{
+    LATCbits.LATC4 = 1;
+    LATCbits.LATC5 = 0;
+}
+
+void acionar_sentido_2_dc()
+{
+    LATCbits.LATC4 = 0;
+    LATCbits.LATC5 = 1;
+}
+
+// Implementação das funções do ADC
+void config_adc()
+{
+    ADCON0bits.CHS  = 0b0000; // A0
+    ADCON1bits.PCFG = 0b1110; // A0 analógica
+    ADCON1bits.VCFG0 = 0;
+    ADCON1bits.VCFG1 = 0;
+    ADCON2bits.ADFM = 1;
+    ADCON2bits.ACQT = 0b111;
+    ADCON2bits.ADCS = 0b100;
+    ADCON0bits.ADON = 1;
+}
+
+
+int read_adc()
+{
+    ADCON0bits.GO = 1;
+    while (ADCON0bits.GODONE);
+    return ADRES;
+}
